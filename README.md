@@ -1,6 +1,6 @@
 # nagardoot-video
 
-Expo (React Native) app that records synchronized video + GPS, packages sessions as zip, uploads to a laptop over HTTP, and runs **YOLOv10s** pothole detection on the server.
+This project processes pothole detections from road video: capture synchronized **video + GPS** on a phone, upload sessions to a laptop, and run **YOLOv10s** inference to export annotated frames (with optional complaint workflows downstream).
 
 ## Quick start
 
