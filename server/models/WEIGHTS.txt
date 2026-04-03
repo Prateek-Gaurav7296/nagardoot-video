@@ -1,0 +1,7 @@
+Put your trained YOLOv10s weights here as:
+
+  yolov10s.pt
+
+Or set environment variable POTHOLE_MODEL to any .pt path.
+
+This directory is gitignored for *.pt files.
