@@ -1,0 +1,4 @@
+# Generated or copied mobile models (large)
+*.onnx
+*.mlmodel
+*.mlpackage

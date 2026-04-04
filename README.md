@@ -1,17 +1,27 @@
 # nagardoot-video
 
-This project processes pothole detections from road video: capture synchronized **video + GPS** on a phone, upload sessions to a laptop, and run **YOLOv10s** inference to export annotated frames (with optional complaint workflows downstream).
+This project processes pothole detections from road video: capture synchronized **video + GPS** on a phone, run **on-device YOLO (ONNX)** overlays in real time on iOS/Android dev builds, optionally upload sessions to a laptop, and run **YOLOv10s** server-side inference to export annotated frames (with optional complaint workflows downstream).
 
 ## Quick start
 
-### Mobile (Expo)
+### Mobile (Expo + native modules)
+
+**Expo Go cannot run Vision Camera frame processors or ONNX.** Use a **development or production build** (e.g. [EAS Build](https://docs.expo.dev/build/introduction/)):
 
 ```bash
 npm install
-npx expo start
+npx expo start --dev-client
 ```
 
-Open in **Expo Go** on a device. Set the Mac’s LAN IP for upload (see on-screen hint).
+On-device model: export ONNX (see `scripts/export_mobile_model.py` and `assets/models/README.txt`), then either bundle it via `services/modelAsset.js` + `assets/models/pothole.onnx`, or copy `pothole.onnx` to the app documents directory as `pothole.onnx`.
+
+### Installable iOS build (TestFlight / Ad Hoc)
+
+1. Configure Apple Developer credentials and EAS project (`eas.json` is included).
+2. Build: `npm run build:ios` (or `eas build --platform ios`).
+3. Install the `.ipa` via TestFlight or internal distribution.
+
+**Optional** upload to a Mac for laptop-side inference: enable “Optional: upload zip to Mac” in the app and set the Mac LAN IP (same Wi‑Fi).
 
 ### Laptop: upload API
 

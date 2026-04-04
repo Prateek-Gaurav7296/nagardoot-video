@@ -7,6 +7,7 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "scheme": "nagardoot-video",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -14,6 +15,7 @@
     },
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.nagardoot.video",
       "infoPlist": {
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true
@@ -21,6 +23,7 @@
       }
     },
     "android": {
+      "package": "com.nagardoot.video",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -37,20 +40,25 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      [
-        "expo-camera",
-        {
-          "cameraPermission": "Allow $(PRODUCT_NAME) to record video.",
-          "recordAudioAndroid": false
-        }
-      ],
+      "expo-dev-client",
       [
         "expo-location",
         {
           "locationAlwaysAndWhenInUsePermission": "Allow $(PRODUCT_NAME) to log GPS during recording.",
           "locationWhenInUsePermission": "Allow $(PRODUCT_NAME) to log GPS during recording."
         }
-      ]
+      ],
+      [
+        "react-native-vision-camera",
+        {
+          "cameraPermissionText": "$(PRODUCT_NAME) needs camera access to record pothole video and run on-device detection.",
+          "enableMicrophonePermission": false,
+          "enableFrameProcessors": true,
+          "enableCodeScanner": false
+        }
+      ],
+      "onnxruntime-react-native",
+      "expo-asset"
     ]
   }
 }

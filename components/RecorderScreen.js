@@ -1,7 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, Button, Linking, StyleSheet, Text, TextInput, View } from 'react-native';
-import { CameraView } from 'expo-camera';
+import {
+  AppState,
+  Button,
+  Linking,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 
+import PotholeCamera from './PotholeCamera';
 import * as CameraService from '../services/CameraService';
 import * as LocationService from '../services/LocationService';
 import * as FileService from '../services/FileService';
@@ -41,6 +51,14 @@ export default function RecorderScreen() {
   const [detailMessage, setDetailMessage] = useState('');
   const [uploadHost, setUploadHost] = useState('');
   const [uploadPort, setUploadPort] = useState(String(UploadService.DEFAULT_UPLOAD_PORT));
+  const [enableOnDeviceInference, setEnableOnDeviceInference] = useState(true);
+  const [latestDetections, setLatestDetections] = useState(
+    /** @type {Array<{ nx1: number, ny1: number, nx2: number, ny2: number, score: number, classId: number, label: string }>} */ (
+      []
+    )
+  );
+  /** Optional laptop upload (off by default). */
+  const [enableLaptopUpload, setEnableLaptopUpload] = useState(false);
   const permRequestInFlight = useRef(false);
 
   const requestAllPermissions = useCallback(async () => {
@@ -60,7 +78,7 @@ export default function RecorderScreen() {
       if (!cam.camera) blocking.push('camera');
       if (!loc.granted) blocking.push('location');
       if (blocking.length) {
-        const hint = `Allow ${blocking.join(' and ')}. Expo Go → Settings → Expo Go.`;
+        const hint = `Allow ${blocking.join(' and ')}. Open Settings → ${blocking.join(' & ')} for this app.`;
         setPermHint(hint);
         console.warn('[RecorderScreen]', hint);
       } else {
@@ -101,6 +119,10 @@ export default function RecorderScreen() {
     });
     return () => sub.remove();
   }, [requestAllPermissions]);
+
+  const cameraActive = corePermsOk && phase !== 'processing' && phase !== 'uploading';
+  const inferenceEnabled =
+    enableOnDeviceInference && (phase === 'idle' || phase === 'recording') && cameraActive;
 
   const startRecording = useCallback(async () => {
     if (phase !== 'idle') {
@@ -216,86 +238,112 @@ export default function RecorderScreen() {
   const statusLine = statusForPhase(phase);
   const startEnabled = phase === 'idle' && corePermsOk && cameraReady;
   const stopEnabled = phase === 'recording';
-  const uploadEnabled = phase === 'stopped' && !!pendingZipUri && phase !== 'uploading';
+  const uploadEnabled =
+    enableLaptopUpload && phase === 'stopped' && !!pendingZipUri && phase !== 'uploading';
 
   return (
-    <View style={styles.root}>
-      <View style={styles.preview}>
-        {corePermsOk ? (
-          <CameraView
-            ref={cameraRef}
-            style={StyleSheet.absoluteFill}
-            facing="back"
-            mode="video"
-            mute
-            onCameraReady={() => setCameraReady(true)}
-            onMountError={onCameraMountError}
-          />
-        ) : (
-          <View style={styles.placeholderWrap}>
-            <Text style={styles.placeholder}>
-              Camera and location need permission to work.
-            </Text>
-            <Text style={styles.placeholderSub}>
-              Use “Ask again” first, or “Open Settings” and enable Camera and Location for Expo Go.
-              Video is recorded without audio.
-            </Text>
+    <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <View style={styles.root}>
+        <View style={styles.preview}>
+          {corePermsOk ? (
+            <PotholeCamera
+              cameraRef={cameraRef}
+              isActive={cameraActive}
+              onReady={() => setCameraReady(true)}
+              onMountError={onCameraMountError}
+              inferenceEnabled={inferenceEnabled}
+              modelEnabled={enableOnDeviceInference}
+              gpsLogRef={gpsLogRef}
+              onDetectionsChange={setLatestDetections}
+            />
+          ) : (
+            <View style={styles.placeholderWrap}>
+              <Text style={styles.placeholder}>
+                Camera and location need permission to work.
+              </Text>
+              <Text style={styles.placeholderSub}>
+                Use “Ask again” first, or “Open Settings” and enable Camera and Location for this app.
+                Video is recorded without audio.
+              </Text>
+            </View>
+          )}
+        </View>
+
+        <Text style={styles.status}>Status: {statusLine}</Text>
+        {!corePermsOk ? (
+          <View style={styles.permActions}>
+            <Button title="Ask again" onPress={requestAllPermissions} />
+            <View style={styles.rowTight} />
+            <Button title="Open Settings" onPress={openAppSettings} />
           </View>
-        )}
-      </View>
+        ) : null}
+        {permHint ? <Text style={styles.hint}>{permHint}</Text> : null}
+        {detailMessage ? <Text style={styles.hint}>{detailMessage}</Text> : null}
 
-      <Text style={styles.status}>Status: {statusLine}</Text>
-      {!corePermsOk ? (
-        <View style={styles.permActions}>
-          <Button title="Ask again" onPress={requestAllPermissions} />
-          <View style={styles.rowTight} />
-          <Button title="Open Settings" onPress={openAppSettings} />
+        <View style={styles.rowSwitch}>
+          <Text style={styles.switchLabel}>On-device pothole inference (preview)</Text>
+          <Switch value={enableOnDeviceInference} onValueChange={setEnableOnDeviceInference} />
         </View>
-      ) : null}
-      {permHint ? <Text style={styles.hint}>{permHint}</Text> : null}
-      {detailMessage ? <Text style={styles.hint}>{detailMessage}</Text> : null}
 
-      {corePermsOk ? (
-        <View style={styles.uploadConfig}>
-          <Text style={styles.label}>Upload: Mac IP + port (same Wi‑Fi as phone)</Text>
-          <Text style={styles.uploadHint}>
-            On your Mac, Terminal: ipconfig getifaddr en0 — type that IP here (192.168.1.100 is only an
-            example). In Safari on the phone, open http://YOUR_IP:5001/health to verify the network.
-          </Text>
-          <TextInput
-            style={styles.input}
-            value={uploadHost}
-            onChangeText={setUploadHost}
-            placeholder="Mac Wi‑Fi IP from ipconfig getifaddr en0"
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="numbers-and-punctuation"
-          />
-          <TextInput
-            style={styles.inputPort}
-            value={uploadPort}
-            onChangeText={setUploadPort}
-            placeholder="5001"
-            autoCapitalize="none"
-            keyboardType="number-pad"
-          />
+        {latestDetections.length > 0 ? (
+          <View style={styles.detList}>
+            <Text style={styles.detTitle}>Latest detections (GPS id)</Text>
+            {latestDetections.slice(0, 8).map((d, i) => (
+              <Text key={i} style={styles.detLine}>
+                {d.label} · score {(d.score * 100).toFixed(0)}% · cls {d.classId}
+              </Text>
+            ))}
+          </View>
+        ) : null}
+
+        <View style={styles.rowSwitch}>
+          <Text style={styles.switchLabel}>Optional: upload zip to Mac for server inference</Text>
+          <Switch value={enableLaptopUpload} onValueChange={setEnableLaptopUpload} />
         </View>
-      ) : null}
 
-      <View style={styles.row}>
-        <Button title="Start Recording" onPress={startRecording} disabled={!startEnabled} />
+        {corePermsOk && enableLaptopUpload ? (
+          <View style={styles.uploadConfig}>
+            <Text style={styles.label}>Upload: Mac IP + port (same Wi‑Fi as phone)</Text>
+            <Text style={styles.uploadHint}>
+              On your Mac, Terminal: ipconfig getifaddr en0 — type that IP here (192.168.1.100 is only an
+              example). In Safari on the phone, open http://YOUR_IP:5001/health to verify the network.
+            </Text>
+            <TextInput
+              style={styles.input}
+              value={uploadHost}
+              onChangeText={setUploadHost}
+              placeholder="Mac Wi‑Fi IP from ipconfig getifaddr en0"
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="numbers-and-punctuation"
+            />
+            <TextInput
+              style={styles.inputPort}
+              value={uploadPort}
+              onChangeText={setUploadPort}
+              placeholder="5001"
+              autoCapitalize="none"
+              keyboardType="number-pad"
+            />
+          </View>
+        ) : null}
+
+        <View style={styles.row}>
+          <Button title="Start Recording" onPress={startRecording} disabled={!startEnabled} />
+        </View>
+        <View style={styles.row}>
+          <Button title="Stop Recording" onPress={stopRecording} disabled={!stopEnabled} />
+        </View>
+        <View style={styles.row}>
+          <Button title="Upload Session" onPress={uploadSession} disabled={!uploadEnabled} />
+        </View>
       </View>
-      <View style={styles.row}>
-        <Button title="Stop Recording" onPress={stopRecording} disabled={!stopEnabled} />
-      </View>
-      <View style={styles.row}>
-        <Button title="Upload Session" onPress={uploadSession} disabled={!uploadEnabled} />
-      </View>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
+  scroll: { paddingBottom: 32 },
   root: { flex: 1, paddingTop: 48, paddingHorizontal: 12 },
   preview: {
     height: 220,
@@ -310,6 +358,17 @@ const styles = StyleSheet.create({
   rowTight: { height: 6 },
   status: { marginBottom: 8 },
   hint: { color: '#333', marginBottom: 8, fontSize: 13 },
+  rowSwitch: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+    gap: 8,
+  },
+  switchLabel: { flex: 1, fontSize: 13, color: '#333' },
+  detList: { marginBottom: 12, padding: 8, backgroundColor: '#f5f5f5', borderRadius: 6 },
+  detTitle: { fontSize: 12, fontWeight: '600', marginBottom: 4, color: '#222' },
+  detLine: { fontSize: 11, color: '#444', marginBottom: 2 },
   uploadConfig: { marginBottom: 10 },
   label: { fontSize: 12, marginBottom: 4, color: '#444' },
   uploadHint: { fontSize: 11, color: '#666', marginBottom: 8, lineHeight: 16 },
